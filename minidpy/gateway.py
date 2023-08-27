@@ -15,11 +15,21 @@ class Gateway:
         self.intents = intents
 
         self._event_listeners: dict[str, list[callable]] = {}
+        self._session_id = None
+        self._resume_url = None
 
     async def connect(self):
         self._ws = await self._session.ws_connect(
             "wss://gateway.discord.gg/?v=10&encoding=json"
         )
+        self._read_task = asyncio.create_task(self._read_task_impl())
+
+    async def reconnect(self):
+        self._heartbeat_task.cancel()
+        self._read_task.cancel()
+        self._ws.close()
+
+        self._ws = await self._session.ws_connect(self._resume_url)
         self._read_task = asyncio.create_task(self._read_task_impl())
 
     def on(self, event: str, function: callable):
@@ -69,13 +79,22 @@ class Gateway:
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
-        await self._send_identify()
+        if self._session_id is None:
+            await self._send_identify()
+        else:
+            await self._send_resume()
 
     async def _op_11(self, _):
         """
         Opcode 11: HEARTBEAT ACK
         """
         pass
+
+    async def _op_7(self, _):
+        """
+        Opcode 7: RECONNECT
+        """
+        await self.reconnect()
 
     async def _send_identify(self):
         """
@@ -95,6 +114,24 @@ class Gateway:
                 "intents": self.intents,
             },
         )
+
+    async def _send_resume(self):
+        """
+        Opcode 6: RESUME
+        """
+
+        await self.send_opcode(
+            6,
+            {
+                "token": self._token,
+                "session_id": self._session_id,
+                "seq": self._seq,
+            },
+        )
+
+    async def _event_READY(self, data):
+        self._resume_url = data["resume_gateway_url"]
+        self._session_id = data["session_id"]
 
     async def send_opcode(self, opcode: int, data: any):
         if self._ws.closed:
