@@ -39,12 +39,18 @@ class Gateway:
                     func = getattr(self, f"_event_{data['t']}", None)
                     if data["t"] in self._event_listeners:
                         for function in self._event_listeners[data["t"]]:
-                            await function(data["d"])
+                            try:
+                                await function(data["d"])
+                            except Exception as error:
+                                print("Uncaught exception:", error)
                 else:
                     func = getattr(self, f"_op_{data['op']}", None)
 
                 if func:
-                    await func(data["d"])
+                    try:
+                        await func(data["d"])
+                    except Exception as error:
+                        print("Uncaught exception:", error)
                 else:
                     print(
                         f"GATEWAY: unknown opcode or event: op={data['op']} t={data['t']}"
