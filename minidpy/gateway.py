@@ -66,7 +66,7 @@ class Gateway:
         async def heartbeat():
             while not self._ws.closed:
                 await self.send_opcode(1, None)
-                await asyncio.sleep(data["heartbeat_interval"])
+                await asyncio.sleep(data["heartbeat_interval"] / 1000)
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
         await self._send_identify()
