@@ -17,6 +17,7 @@ class Gateway:
         self._event_listeners: dict[str, list[callable]] = {}
         self._session_id = None
         self._resume_url = None
+        self._missed_heartbeat = False
 
     async def connect(self):
         self._ws = await self._session.ws_connect(
@@ -75,8 +76,13 @@ class Gateway:
 
         async def heartbeat():
             while not self._ws.closed:
+                if self._missed_heartbeat:
+                    await self.reconnect()
+                    raise asyncio.CancelledError()
                 await self.send_opcode(1, None)
+                self._missed_heartbeat = True
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
+            await self.reconnect()
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
         if self._session_id is None:
@@ -88,7 +94,7 @@ class Gateway:
         """
         Opcode 11: HEARTBEAT ACK
         """
-        pass
+        self._missed_heartbeat = False
 
     async def _op_7(self, _):
         """
