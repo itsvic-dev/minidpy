@@ -2,6 +2,8 @@ import aiohttp
 import asyncio
 import json
 
+_GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json"
+
 
 class Gateway:
     def __init__(
@@ -20,9 +22,7 @@ class Gateway:
         self._missed_heartbeat = False
 
     async def connect(self):
-        self._ws = await self._session.ws_connect(
-            "wss://gateway.discord.gg/?v=10&encoding=json"
-        )
+        self._ws = await self._session.ws_connect(_GATEWAY_URL)
         self._read_task = asyncio.create_task(self._read_task_impl())
 
     async def reconnect(self):
@@ -77,12 +77,12 @@ class Gateway:
         async def heartbeat():
             while not self._ws.closed:
                 if self._missed_heartbeat:
-                    await self.reconnect()
+                    asyncio.create_task(self.reconnect())
                     raise asyncio.CancelledError()
                 await self.send_opcode(1, None)
                 self._missed_heartbeat = True
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
-            await self.reconnect()
+            asyncio.create_task(self.reconnect())
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
         if self._session_id is None:
@@ -100,6 +100,15 @@ class Gateway:
         """
         Opcode 7: RECONNECT
         """
+        asyncio.create_task(self.reconnect())
+
+    async def _op_9(self, can_resume):
+        """
+        Opcode 9: INVALID SESSION
+        """
+        if not can_resume:
+            self._session_id = None
+            self._resume_url = _GATEWAY_URL
         asyncio.create_task(self.reconnect())
 
     async def _send_identify(self):
