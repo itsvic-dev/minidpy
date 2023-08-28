@@ -100,7 +100,7 @@ class Gateway:
         """
         Opcode 7: RECONNECT
         """
-        await self.reconnect()
+        asyncio.create_task(self.reconnect())
 
     async def _send_identify(self):
         """
