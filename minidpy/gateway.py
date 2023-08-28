@@ -28,7 +28,7 @@ class Gateway:
     async def reconnect(self):
         self._heartbeat_task.cancel()
         self._read_task.cancel()
-        self._ws.close()
+        await self._ws.close()
 
         self._ws = await self._session.ws_connect(self._resume_url)
         self._read_task = asyncio.create_task(self._read_task_impl())
