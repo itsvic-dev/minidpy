@@ -29,6 +29,7 @@ class Gateway:
         self._heartbeat_task.cancel()
         self._read_task.cancel()
         await self._ws.close()
+        self._missed_heartbeat = False
 
         self._ws = await self._session.ws_connect(self._resume_url)
         self._read_task = asyncio.create_task(self._read_task_impl())
