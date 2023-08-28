@@ -26,6 +26,7 @@ class Gateway:
         self._read_task = asyncio.create_task(self._read_task_impl())
 
     async def reconnect(self):
+        print("GATEWAY: reconnecting...")
         self._heartbeat_task.cancel()
         self._read_task.cancel()
         await self._ws.close()
@@ -78,11 +79,13 @@ class Gateway:
         async def heartbeat():
             while not self._ws.closed:
                 if self._missed_heartbeat:
+                    print("GATEWAY: missed heartbeat")
                     asyncio.create_task(self.reconnect())
                     raise asyncio.CancelledError()
                 await self.send_opcode(1, None)
                 self._missed_heartbeat = True
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
+            print("GATEWAY: WS closed in heartbeat task")
             asyncio.create_task(self.reconnect())
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
