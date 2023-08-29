@@ -70,6 +70,9 @@ class Gateway:
                     )
             else:
                 raise Exception("uhhh")
+        if self._ws.closed:
+            print("GATEWAY: closed in read task, code", self._ws.close_code)
+            asyncio.create_task(self.reconnect())
 
     async def _op_10(self, data):
         """
