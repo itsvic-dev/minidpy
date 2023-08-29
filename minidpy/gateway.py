@@ -40,6 +40,7 @@ class Gateway:
             _GATEWAY_URL + ("&compress=zlib-stream" if self._use_zlib_stream else "")
         )
         self._read_task = asyncio.create_task(self._read_task_impl())
+        await self._read_task
 
     async def reconnect(self):
         logger.info("reconnecting...")
@@ -50,6 +51,7 @@ class Gateway:
 
         self._ws = await self._session.ws_connect(self._resume_url)
         self._read_task = asyncio.create_task(self._read_task_impl())
+        await self._read_task
 
     def on(self, event: str, function: callable):
         if event not in self._event_listeners:
