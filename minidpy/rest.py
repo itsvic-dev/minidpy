@@ -36,10 +36,10 @@ class REST:
         return data
 
     async def get(self, endpoint: str):
-        return self._request("GET", endpoint, None)
+        return await self._request("GET", endpoint, None)
 
     async def post(self, endpoint: str, data: any):
-        return self._request("POST", endpoint, data)
+        return await self._request("POST", endpoint, data)
 
 
 class RESTError(Exception):
