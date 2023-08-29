@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 
 
 _BASE_URL = "https://discord.com/api"
@@ -17,19 +18,23 @@ class REST:
             "Bot " if is_bot else ""
         ) + self._token
 
-    async def get(self, endpoint: str):
-        resp = await self._session.get(f"{_BASE_URL}/v{self._version}{endpoint}")
-        data = await resp.json()
-        if "code" in data and "message" in data:
-            raise RESTError(data["code"], data["message"])
-
-    async def post(self, endpoint: str, data: any):
-        resp = await self._session.post(
-            f"{_BASE_URL}/v{self._version}{endpoint}", json=data
+    async def _request(self, method: str, endpoint: str, data: any):
+        resp = await self._session.request(
+            method, f"{_BASE_URL}/v{self._version}{endpoint}", json=data
         )
         data = await resp.json()
+        if "retry_after" in data:
+            await asyncio.sleep(data["retry_after"])
+            return self._request(method, endpoint, data)
         if "code" in data and "message" in data:
             raise RESTError(data["code"], data["message"])
+        return data
+
+    async def get(self, endpoint: str):
+        return self._request("GET", endpoint, None)
+
+    async def post(self, endpoint: str, data: any):
+        return self._request("POST", endpoint, data)
 
 
 class RESTError(Exception):
