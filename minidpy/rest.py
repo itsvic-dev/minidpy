@@ -27,6 +27,8 @@ class REST:
         resp = await self._session.request(
             method, f"{_BASE_URL}/v{self._version}{endpoint}", json=data
         )
+        if resp.status == 204:
+            return None
         resp_data = await resp.json()
         if "retry_after" in resp_data:
             await asyncio.sleep(resp_data["retry_after"])
