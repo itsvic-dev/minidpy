@@ -4,7 +4,7 @@ import json
 import zlib
 
 _GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json"
-_ZLIB_SUFFIX = b"\0\0\xff\xff"  # Z_SYNC_FLUSH
+_ZLIB_SUFFIX = b"\x00\x00\xff\xff"  # Z_SYNC_FLUSH
 
 
 class Gateway:
@@ -60,7 +60,7 @@ class Gateway:
             elif msg.type == aiohttp.WSMsgType.BINARY and self._use_zlib_stream:
                 self._buffer.extend(msg.data)
 
-                if len(msg) < 4 or msg[-4:] != _ZLIB_SUFFIX:
+                if len(msg.data) < 4 or msg.data[-4:] != _ZLIB_SUFFIX:
                     continue
 
                 msg = self._decompressobj.decompress(self._buffer)
