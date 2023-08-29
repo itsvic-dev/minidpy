@@ -2,6 +2,9 @@ import aiohttp
 import asyncio
 import json
 import zlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 _GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json"
 _ZLIB_SUFFIX = b"\x00\x00\xff\xff"  # Z_SYNC_FLUSH
@@ -39,7 +42,7 @@ class Gateway:
         self._read_task = asyncio.create_task(self._read_task_impl())
 
     async def reconnect(self):
-        print("GATEWAY: reconnecting...")
+        logger.info("reconnecting...")
         self._heartbeat_task.cancel()
         self._read_task.cancel()
         await self._ws.close()
@@ -67,14 +70,14 @@ class Gateway:
                 self._buffer = bytearray()
                 await self._handle_ws_message(msg.decode())
             else:
-                print("GATEWAY: received unknown msg type, ignoring")
+                logger.debug("received unknown msg type, ignoring")
         if self._ws.closed:
-            print("GATEWAY: closed in read task, code", self._ws.close_code)
+            logger.debug(f"closed in read task, code {self._ws.close_code}")
             asyncio.create_task(self.reconnect())
 
     async def _handle_ws_message(self, message: str):
         data = json.loads(message)
-        print(f"GATEWAY: recv op={data['op']} t={data['t']}")
+        logger.debug(f"recv op={data['op']} t={data['t']}")
         if "s" in data:
             self._seq = data["s"]
         func = None
@@ -85,7 +88,7 @@ class Gateway:
                     try:
                         await function(data["d"])
                     except Exception as error:
-                        print("Uncaught exception:", error)
+                        logger.error(f"Uncaught exception: {error}")
         else:
             func = getattr(self, f"_op_{data['op']}", None)
 
@@ -93,9 +96,9 @@ class Gateway:
             try:
                 await func(data["d"])
             except Exception as error:
-                print("Uncaught exception:", error)
+                logger.error(f"Uncaught exception in library code: {error}")
         else:
-            print(f"GATEWAY: unknown opcode or event: op={data['op']} t={data['t']}")
+            logger.debug(f"unknown opcode or event: op={data['op']} t={data['t']}")
 
     async def _op_10(self, data):
         """
@@ -105,13 +108,13 @@ class Gateway:
         async def heartbeat():
             while not self._ws.closed:
                 if self._missed_heartbeat:
-                    print("GATEWAY: missed heartbeat")
+                    logger.debug("missed heartbeat")
                     asyncio.create_task(self.reconnect())
                     raise asyncio.CancelledError()
                 await self.send_opcode(1, None)
                 self._missed_heartbeat = True
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
-            print("GATEWAY: WS closed in heartbeat task")
+            logger.debug("WS closed in heartbeat task")
             asyncio.create_task(self.reconnect())
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
@@ -181,5 +184,5 @@ class Gateway:
     async def send_opcode(self, opcode: int, data: any):
         if self._ws.closed:
             raise Exception("WS is closed")
-        print(f"GATEWAY: send op={opcode}")
+        logger.debug(f"send op={opcode}")
         await self._ws.send_json({"op": opcode, "d": data})
