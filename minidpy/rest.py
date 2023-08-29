@@ -23,9 +23,9 @@ class REST:
                 "User-Agent"
             ] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 
-    async def _request(self, method: str, endpoint: str, resp_data: any):
+    async def _request(self, method: str, endpoint: str, data: any):
         resp = await self._session.request(
-            method, f"{_BASE_URL}/v{self._version}{endpoint}", json=resp_data
+            method, f"{_BASE_URL}/v{self._version}{endpoint}", json=data
         )
         resp_data = await resp.json()
         if "retry_after" in resp_data:
