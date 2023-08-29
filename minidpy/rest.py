@@ -44,6 +44,6 @@ class REST:
 
 class RESTError(Exception):
     def __init__(self, code: int, message: str):
-        super(f"Error {code}: {message}")
+        super().__init__(f"Error {code}: {message}")
         self.code = code
         self.message = message
