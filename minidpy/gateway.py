@@ -23,7 +23,6 @@ class Gateway:
         self._token = token
         self._session = session
         self._heartbeat_task = None
-        self._read_task = None
         self.intents = intents
 
         self._event_listeners: dict[str, list[callable]] = {}
@@ -35,30 +34,34 @@ class Gateway:
             self._decompressobj = zlib.decompressobj()
             self._buffer = bytearray()
 
+        self.should_reconnect = True
+
     async def connect(self):
+        logger.info("Connecting...")
         self._ws = await self._session.ws_connect(
             _GATEWAY_URL + ("&compress=zlib-stream" if self._use_zlib_stream else "")
         )
-        self._read_task = asyncio.create_task(self._read_task_impl())
-        await self._read_task
+        await self._read_ws()
 
     async def reconnect(self):
-        logger.info("reconnecting...")
+        if not self.should_reconnect:
+            raise Exception(
+                "Gateway.should_reconnect is false but reconnect was called"
+            )
+        logger.info("Reconnecting...")
         self._heartbeat_task.cancel()
-        self._read_task.cancel()
         await self._ws.close()
         self._missed_heartbeat = False
 
         self._ws = await self._session.ws_connect(self._resume_url)
-        self._read_task = asyncio.create_task(self._read_task_impl())
-        await self._read_task
+        await self._read_ws()
 
     def on(self, event: str, function: callable):
         if event not in self._event_listeners:
             self._event_listeners[event] = []
         self._event_listeners[event].append(function)
 
-    async def _read_task_impl(self):
+    async def _read_ws(self):
         async for msg in self._ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 await self._handle_ws_message(msg.data)
@@ -73,9 +76,9 @@ class Gateway:
                 await self._handle_ws_message(msg.decode())
             else:
                 logger.debug("received unknown msg type, ignoring")
-        if self._ws.closed:
-            logger.debug(f"closed in read task, code {self._ws.close_code}")
-            asyncio.create_task(self.reconnect())
+        if self._ws.closed and self.should_reconnect:
+            logger.debug(f"WS closed with code {self._ws.close_code}")
+            await self.reconnect()
 
     async def _handle_ws_message(self, message: str):
         data = json.loads(message)
@@ -110,14 +113,12 @@ class Gateway:
         async def heartbeat():
             while not self._ws.closed:
                 if self._missed_heartbeat:
-                    logger.debug("missed heartbeat")
-                    asyncio.create_task(self.reconnect())
+                    logger.debug("missed heartbeat, closing WS connection")
+                    await self._ws.close(code=1006)
                     raise asyncio.CancelledError()
                 await self.send_opcode(1, None)
                 self._missed_heartbeat = True
                 await asyncio.sleep(data["heartbeat_interval"] / 1000)
-            logger.debug("WS closed in heartbeat task")
-            asyncio.create_task(self.reconnect())
 
         self._heartbeat_task = asyncio.create_task(heartbeat(), name="GatewayHeartbeat")
         if self._session_id is None:
@@ -135,7 +136,8 @@ class Gateway:
         """
         Opcode 7: RECONNECT
         """
-        asyncio.create_task(self.reconnect())
+        self.should_reconnect = True
+        await self.reconnect()
 
     async def _op_9(self, can_resume):
         """
@@ -144,7 +146,7 @@ class Gateway:
         if not can_resume:
             self._session_id = None
             self._resume_url = _GATEWAY_URL
-        asyncio.create_task(self.reconnect())
+        await self.reconnect()
 
     async def _send_identify(self):
         """

@@ -1,6 +1,7 @@
 from minidpy import Gateway
 import asyncio
 import aiohttp
+import logging
 
 
 async def on_ready(data):
@@ -8,6 +9,7 @@ async def on_ready(data):
 
 
 async def main():
+    logging.basicConfig(level=logging.INFO)
     with open("token.txt") as file:
         token = file.readline().strip("\n")
     gateway = Gateway(aiohttp.ClientSession(), token)
@@ -20,4 +22,3 @@ async def main():
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-    loop.run_forever()
