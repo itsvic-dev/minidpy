@@ -30,7 +30,7 @@ class REST:
         data = await resp.json()
         if "retry_after" in data:
             await asyncio.sleep(data["retry_after"])
-            return self._request(method, endpoint, data)
+            return await self._request(method, endpoint, data)
         if "code" in data and "message" in data:
             raise RESTError(data["code"], data["message"])
         return data
