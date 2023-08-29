@@ -1,13 +1,20 @@
 import aiohttp
 import asyncio
 import json
+import zlib
 
 _GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json"
+_ZLIB_SUFFIX = b"\0\0\xff\xff"  # Z_SYNC_FLUSH
 
 
 class Gateway:
     def __init__(
-        self, session: aiohttp.ClientSession, token: str, *, intents=1 << 0 | 1 << 9
+        self,
+        session: aiohttp.ClientSession,
+        token: str,
+        *,
+        intents=1 << 0 | 1 << 9,
+        use_zlib_stream=True,
     ):
         self._seq = -1
         self._token = token
@@ -20,9 +27,15 @@ class Gateway:
         self._session_id = None
         self._resume_url = None
         self._missed_heartbeat = False
+        self._use_zlib_stream = use_zlib_stream
+        if self._use_zlib_stream:
+            self._decompressobj = zlib.decompressobj()
+            self._buffer = bytearray()
 
     async def connect(self):
-        self._ws = await self._session.ws_connect(_GATEWAY_URL)
+        self._ws = await self._session.ws_connect(
+            _GATEWAY_URL + ("&compress=zlib-stream" if self._use_zlib_stream else "")
+        )
         self._read_task = asyncio.create_task(self._read_task_impl())
 
     async def reconnect(self):
@@ -44,8 +57,17 @@ class Gateway:
         async for msg in self._ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 await self._handle_ws_message(msg.data)
+            elif msg.type == aiohttp.WSMsgType.BINARY and self._use_zlib_stream:
+                self._buffer.extend(msg.data)
+
+                if len(msg) < 4 or msg[-4:] != _ZLIB_SUFFIX:
+                    continue
+
+                msg = self._decompressobj.decompress(self._buffer)
+                self._buffer = bytearray()
+                await self._handle_ws_message(msg.decode())
             else:
-                raise Exception("uhhh")
+                print("GATEWAY: received unknown msg type, ignoring")
         if self._ws.closed:
             print("GATEWAY: closed in read task, code", self._ws.close_code)
             asyncio.create_task(self.reconnect())
