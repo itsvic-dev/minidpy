@@ -43,36 +43,37 @@ class Gateway:
     async def _read_task_impl(self):
         async for msg in self._ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
-                data = json.loads(msg.data)
-                print(f"GATEWAY: recv op={data['op']} t={data['t']}")
-                if "s" in data:
-                    self._seq = data["s"]
-                func = None
-                if data["t"] is not None:
-                    func = getattr(self, f"_event_{data['t']}", None)
-                    if data["t"] in self._event_listeners:
-                        for function in self._event_listeners[data["t"]]:
-                            try:
-                                await function(data["d"])
-                            except Exception as error:
-                                print("Uncaught exception:", error)
-                else:
-                    func = getattr(self, f"_op_{data['op']}", None)
-
-                if func:
-                    try:
-                        await func(data["d"])
-                    except Exception as error:
-                        print("Uncaught exception:", error)
-                else:
-                    print(
-                        f"GATEWAY: unknown opcode or event: op={data['op']} t={data['t']}"
-                    )
+                await self._handle_ws_message(msg.data)
             else:
                 raise Exception("uhhh")
         if self._ws.closed:
             print("GATEWAY: closed in read task, code", self._ws.close_code)
             asyncio.create_task(self.reconnect())
+
+    async def _handle_ws_message(self, message: str):
+        data = json.loads(message)
+        print(f"GATEWAY: recv op={data['op']} t={data['t']}")
+        if "s" in data:
+            self._seq = data["s"]
+        func = None
+        if data["t"] is not None:
+            func = getattr(self, f"_event_{data['t']}", None)
+            if data["t"] in self._event_listeners:
+                for function in self._event_listeners[data["t"]]:
+                    try:
+                        await function(data["d"])
+                    except Exception as error:
+                        print("Uncaught exception:", error)
+        else:
+            func = getattr(self, f"_op_{data['op']}", None)
+
+        if func:
+            try:
+                await func(data["d"])
+            except Exception as error:
+                print("Uncaught exception:", error)
+        else:
+            print(f"GATEWAY: unknown opcode or event: op={data['op']} t={data['t']}")
 
     async def _op_10(self, data):
         """
