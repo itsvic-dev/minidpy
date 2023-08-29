@@ -76,7 +76,10 @@ class Gateway:
                 await self._handle_ws_message(msg.decode())
             else:
                 logger.debug("received unknown msg type, ignoring")
-        if self._ws.closed and self.should_reconnect:
+        logger.debug(
+            f"_read_ws after async-for-loop _ws.closed={self._ws.closed} should_reconnect={self.should_reconnect}"
+        )
+        if self.should_reconnect:
             logger.debug(f"WS closed with code {self._ws.close_code}")
             await self.reconnect()
 
@@ -90,10 +93,7 @@ class Gateway:
             func = getattr(self, f"_event_{data['t']}", None)
             if data["t"] in self._event_listeners:
                 for function in self._event_listeners[data["t"]]:
-                    try:
-                        await function(data["d"])
-                    except Exception as error:
-                        logger.error(f"Uncaught exception: {error}")
+                    asyncio.create_task(function(data["d"]))
         else:
             func = getattr(self, f"_op_{data['op']}", None)
 

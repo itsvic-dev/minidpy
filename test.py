@@ -9,7 +9,7 @@ async def on_ready(data):
 
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     with open("token.txt") as file:
         token = file.readline().strip("\n")
     gateway = Gateway(aiohttp.ClientSession(), token)
